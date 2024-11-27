@@ -2,6 +2,7 @@
 const SPREADSHEET_ID = "1otAXwjTKZHORnnhkD17erjAd171E3SxdyjWDErO3mj8";
 const SHEET_NAME = "GR"; // Укажите название листа
 
+// Основная функция для запуска логики
 function main() {
   const allowedWords = fetchAllowedWordsFromSheet(); // Получаем список разрешенных слов
   const reviewLog = []; // Лог для слов, требующих добавления в минус-слова
@@ -82,4 +83,9 @@ function addNegativeKeywords(log) {
       Logger.log(`Added negative keyword: "${item.query}" to Ad Group ID: ${item.adGroupId}`);
     }
   });
+}
+
+// Автоматический вызов основной функции при загрузке скрипта
+if (typeof main === "function") {
+  main();
 }
