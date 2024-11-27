@@ -1,10 +1,8 @@
-// ID вашей Google таблицы
-const SPREADSHEET_ID = "1otAXwjTKZHORnnhkD17erjAd171E3SxdyjWDErO3mj8";
-const SHEET_NAME = "GR"; // Укажите название листа
+// URL опубликованной Google Таблицы в формате CSV
+const SPREADSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTM_zxGOTUVcyLqtkTURUizM4bPRM_gkGBRCOzjPnUVE-b_z5tUuT1GrcB19t5hFHrflgWUa9T2j910/pub?output=csv";
 
-// Основная функция для запуска логики
 function main() {
-  const allowedWords = fetchAllowedWordsFromSheet(); // Получаем список разрешенных слов
+  const allowedWords = fetchAllowedWordsFromCSV(); // Получаем список разрешенных слов
   const reviewLog = []; // Лог для слов, требующих добавления в минус-слова
 
   const searchTermsReport = AdsApp.report(
@@ -44,16 +42,12 @@ function main() {
   addNegativeKeywords(reviewLog);
 }
 
-// Получение списка разрешенных слов из Google Sheets
-function fetchAllowedWordsFromSheet() {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
-  if (!sheet) {
-    throw new Error(`Sheet with name "${SHEET_NAME}" not found.`);
-  }
-  const values = sheet.getRange("A1:A").getValues(); // Предполагается, что разрешенные слова находятся в колонке A
-  return values
-    .map(row => row[0]?.toLowerCase()) // Приведение к нижнему регистру
-    .filter(word => word); // Убираем пустые строки
+// Получение списка разрешенных слов из Google Таблицы через CSV
+function fetchAllowedWordsFromCSV() {
+  const response = UrlFetchApp.fetch(SPREADSHEET_CSV_URL);
+  const csvData = response.getContentText(); // Получаем содержимое CSV
+  const rows = csvData.split("\n"); // Разбиваем на строки
+  return rows.map(row => row.trim().toLowerCase()).filter(Boolean); // Приводим к нижнему регистру и убираем пустые строки
 }
 
 // Функция логирования
@@ -83,9 +77,4 @@ function addNegativeKeywords(log) {
       Logger.log(`Added negative keyword: "${item.query}" to Ad Group ID: ${item.adGroupId}`);
     }
   });
-}
-
-// Автоматический вызов основной функции при загрузке скрипта
-if (typeof main === "function") {
-  main();
 }
