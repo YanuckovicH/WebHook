@@ -4,28 +4,30 @@ const SHEET_NAME = "1"; // Укажите название листа
 
 function main() {
   const allowedWords = fetchAllowedWordsFromSheet(); // Получаем список разрешенных слов
-  const reviewLog = []; // Лог для слов, требующих одобрения
-  
+  const reviewLog = []; // Лог для слов, требующих добавления в минус-слова
+
   const searchTermsReport = AdsApp.report(
     `SELECT Query, AdGroupId, CampaignId, Impressions, Clicks
      FROM SEARCH_QUERY_PERFORMANCE_REPORT
      WHERE Impressions > 0`
   );
-  
+
   const rows = searchTermsReport.rows();
-  
+
   while (rows.hasNext()) {
     const row = rows.next();
     const query = row['Query'];
     const adGroupId = row['AdGroupId'];
     const campaignId = row['CampaignId'];
-    
-    // Разложить запрос на слова
-    const words = query.split(/\s+/);
-    const hasAllowedWords = words.some(word => allowedWords.includes(word));
-    
-    // Если фраза содержит запрещенные слова, добавить в лог
-    if (!hasAllowedWords) {
+
+    // Разложить запрос на уникальные слова
+    const uniqueWords = Array.from(new Set(query.split(/\s+/)));
+
+    // Проверить, есть ли хотя бы одно слово, которого нет в списке разрешённых
+    const hasUnallowedWords = uniqueWords.some(word => !allowedWords.includes(word.toLowerCase()));
+
+    // Если есть запрещённые слова, добавляем всю фразу в лог
+    if (hasUnallowedWords) {
       reviewLog.push({
         query: query,
         adGroupId: adGroupId,
@@ -33,17 +35,23 @@ function main() {
       });
     }
   }
-  
+
   // Логирование для ручного одобрения
   logReviewItems(reviewLog);
+
+  // Добавление минус-слов
+  addNegativeKeywords(reviewLog);
 }
 
 // Получение списка разрешенных слов из Google Sheets
 function fetchAllowedWordsFromSheet() {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
-  const values = sheet.getRange("A1:A").getValues(); // Предполагается, что разрешенные слова в колонке A
+  if (!sheet) {
+    throw new Error(`Sheet with name "${SHEET_NAME}" not found.`);
+  }
+  const values = sheet.getRange("A1:A").getValues(); // Предполагается, что разрешенные слова находятся в колонке A
   return values
-    .map(row => row[0])
+    .map(row => row[0]?.toLowerCase()) // Приведение к нижнему регистру
     .filter(word => word); // Убираем пустые строки
 }
 
@@ -53,9 +61,25 @@ function logReviewItems(log) {
     Logger.log("No new negative keywords to review.");
     return;
   }
-  
+
   Logger.log("The following search terms are suggested for negative keywords:");
   log.forEach(item => {
     Logger.log(`Query: "${item.query}", AdGroupId: ${item.adGroupId}, CampaignId: ${item.campaignId}`);
+  });
+}
+
+// Добавление минус-слов в фразовом соответствии
+function addNegativeKeywords(log) {
+  if (log.length === 0) {
+    Logger.log("No negative keywords to add.");
+    return;
+  }
+
+  log.forEach(item => {
+    const adGroup = AdsApp.adGroups().withIds([item.adGroupId]).get().next();
+    if (adGroup) {
+      adGroup.createNegativeKeyword(`"${item.query}"`);
+      Logger.log(`Added negative keyword: "${item.query}" to Ad Group ID: ${item.adGroupId}`);
+    }
   });
 }
