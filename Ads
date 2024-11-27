@@ -1,6 +1,6 @@
 // ID вашей Google таблицы
 const SPREADSHEET_ID = "1otAXwjTKZHORnnhkD17erjAd171E3SxdyjWDErO3mj8";
-const SHEET_NAME = "1"; // Укажите название листа
+const SHEET_NAME = "GR"; // Укажите название листа
 
 function main() {
   const allowedWords = fetchAllowedWordsFromSheet(); // Получаем список разрешенных слов
