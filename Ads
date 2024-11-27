@@ -4,10 +4,8 @@ const SPREADSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTM
 function main() {
   try {
     Logger.log("Starting main function...");
-
-    // Загружаем разрешенные слова
     const allowedWords = fetchAllowedWordsFromCSV();
-    Logger.log(`Allowed words fetched successfully. Count: ${allowedWords.length}`);
+    Logger.log(`Allowed words fetched: ${allowedWords.length}`);
 
     const reviewLog = [];
     Logger.log("Fetching search terms report...");
@@ -24,36 +22,23 @@ function main() {
     while (rows.hasNext()) {
       const row = rows.next();
       const query = row['Query'];
-      Logger.log(`Processing query: "${query}"`);
-
       const adGroupId = row['AdGroupId'];
       const campaignId = row['CampaignId'];
 
-      // Разложить запрос на уникальные слова
       const uniqueWords = Array.from(new Set(query.split(/\s+/)));
-      Logger.log(`Unique words in query: ${uniqueWords.join(", ")}`);
-
-      // Проверить, есть ли хотя бы одно слово, которого нет в списке разрешённых
       const hasUnallowedWords = uniqueWords.some(word => !allowedWords.includes(word.toLowerCase()));
 
       if (hasUnallowedWords) {
-        Logger.log(`Query contains unallowed words: "${query}"`);
         reviewLog.push({
           query: query,
           adGroupId: adGroupId,
           campaignId: campaignId
         });
-      } else {
-        Logger.log(`Query is valid: "${query}"`);
       }
     }
 
-    Logger.log("Search terms processed. Logging review items...");
     logReviewItems(reviewLog);
-
-    Logger.log("Adding negative keywords...");
     addNegativeKeywords(reviewLog);
-
     Logger.log("Main function completed successfully.");
   } catch (e) {
     Logger.log(`Error in main function: ${e.message}`);
@@ -61,41 +46,30 @@ function main() {
   }
 }
 
-// Получение списка разрешенных слов из Google Таблицы через CSV
 function fetchAllowedWordsFromCSV() {
   try {
     Logger.log("Fetching allowed words from CSV...");
     const response = UrlFetchApp.fetch(SPREADSHEET_CSV_URL);
-    const csvData = response.getContentText(); // Получаем содержимое CSV
-    Logger.log("CSV data fetched successfully.");
-
-    const rows = csvData.split("\n"); // Разбиваем на строки
-    Logger.log(`Number of rows in CSV: ${rows.length}`);
-
-    const allowedWords = rows.map(row => row.trim().toLowerCase()).filter(Boolean);
-    Logger.log(`Allowed words processed successfully. Count: ${allowedWords.length}`);
-    return allowedWords;
+    const csvData = response.getContentText();
+    const rows = csvData.split("\n");
+    return rows.map(row => row.trim().toLowerCase()).filter(Boolean);
   } catch (e) {
-    Logger.log(`Error fetching allowed words from CSV: ${e.message}`);
-    Logger.log(`Stack trace: ${e.stack}`);
+    Logger.log(`Error fetching allowed words: ${e.message}`);
     return [];
   }
 }
 
-// Функция логирования
 function logReviewItems(log) {
   if (log.length === 0) {
     Logger.log("No new negative keywords to review.");
     return;
   }
 
-  Logger.log("The following search terms are suggested for negative keywords:");
   log.forEach(item => {
     Logger.log(`Query: "${item.query}", AdGroupId: ${item.adGroupId}, CampaignId: ${item.campaignId}`);
   });
 }
 
-// Добавление минус-слов в фразовом соответствии
 function addNegativeKeywords(log) {
   if (log.length === 0) {
     Logger.log("No negative keywords to add.");
@@ -103,18 +77,13 @@ function addNegativeKeywords(log) {
   }
 
   log.forEach(item => {
-    try {
-      Logger.log(`Adding negative keyword: "${item.query}" to Ad Group ID: ${item.adGroupId}`);
-      const adGroup = AdsApp.adGroups().withIds([item.adGroupId]).get().next();
-      if (adGroup) {
-        adGroup.createNegativeKeyword(`"${item.query}"`);
-        Logger.log(`Successfully added negative keyword: "${item.query}"`);
-      } else {
-        Logger.log(`Ad Group not found for ID: ${item.adGroupId}`);
-      }
-    } catch (e) {
-      Logger.log(`Error adding negative keyword "${item.query}": ${e.message}`);
-      Logger.log(`Stack trace: ${e.stack}`);
+    const adGroup = AdsApp.adGroups().withIds([item.adGroupId]).get().next();
+    if (adGroup) {
+      adGroup.createNegativeKeyword(`"${item.query}"`);
+      Logger.log(`Added negative keyword: "${item.query}"`);
     }
   });
 }
+
+// Автоматический вызов main()
+main();
