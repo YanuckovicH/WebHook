@@ -1,6 +1,6 @@
 // URL опубликованной Google Таблицы в формате CSV
 const SPREADSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTM_zxGOTUVcyLqtkTURUizM4bPRM_gkGBRCOzjPnUVE-b_z5tUuT1GrcB19t5hFHrflgWUa9T2j910/pub?output=csv";
-const START_DATE = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'); // Дата запуска скрипта
+const START_DATE = Utilities.formatDate(new Date(), AdsApp.currentAccount().getTimeZone(), 'yyyy-MM-dd'); // Дата запуска скрипта
 
 function main() {
   const allowedWords = fetchAllowedWordsFromCSV(); // Получаем список разрешенных слов
