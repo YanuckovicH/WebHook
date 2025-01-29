@@ -1,22 +1,32 @@
 const SPREADSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTM_zxGOTUVcyLqtkTURUizM4bPRM_gkGBRCOzjPnUVE-b_z5tUuT1GrcB19t5hFHrflgWUa9T2j910/pub?output=csv";
-const START_DATE = Utilities.formatDate(new Date(), AdsApp.currentAccount().getTimeZone(), 'yyyyMMdd'); // Формат даты
+const START_DATE = Utilities.formatDate(new Date(), AdsApp.currentAccount().getTimeZone(), 'yyyyMMdd');
 
 function main() {
-  Logger.log(`Script start date: ${START_DATE}`); // Логирование даты для проверки
-
-  const allowedWords = fetchAllowedWordsFromCSV(); 
-  const reviewLog = [];
+  Logger.log("Script has started...");
+  
+  const allowedWords = fetchAllowedWordsFromCSV();
+  Logger.log(`Allowed words fetched: ${allowedWords.length} words`);
 
   const searchTermsReport = AdsApp.report(
     `SELECT Query, AdGroupId, CampaignId, Impressions, Clicks, Date
      FROM SEARCH_QUERY_PERFORMANCE_REPORT
      WHERE Impressions > 0 AND Date >= '${START_DATE}'`
   );
+  Logger.log("Report generated successfully.");
 
   const rows = searchTermsReport.rows();
 
+  if (!rows.hasNext()) {
+    Logger.log("No rows found in the report.");
+    return;
+  }
+
+  const reviewLog = [];
+  
   while (rows.hasNext()) {
     const row = rows.next();
+    Logger.log(`Processing query: ${row['Query']}`);
+
     const query = row['Query'];
     const adGroupId = row['AdGroupId'];
     const campaignId = row['CampaignId'];
@@ -25,6 +35,7 @@ function main() {
     const hasUnallowedWords = uniqueWords.some(word => !allowedWords.includes(word.toLowerCase()));
 
     if (hasUnallowedWords) {
+      Logger.log(`Unallowed words found in query: ${query}`);
       reviewLog.push({ query, adGroupId, campaignId });
     }
   }
