@@ -1,76 +1,71 @@
 // URL опубликованной Google Таблицы в формате CSV
 const SPREADSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTM_zxGOTUVcyLqtkTURUizM4bPRM_gkGBRCOzjPnUVE-b_z5tUuT1GrcB19t5hFHrflgWUa9T2j910/pub?output=csv";
+const START_DATE = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'); // Дата запуска скрипта
 
 function main() {
-  try {
-    Logger.log("Starting main function...");
-    const allowedWords = fetchAllowedWordsFromCSV();
-    Logger.log(`Allowed words fetched: ${allowedWords.length}`);
+  const allowedWords = fetchAllowedWordsFromCSV(); // Получаем список разрешенных слов
+  const reviewLog = []; // Лог для слов, требующих добавления в минус-слова
 
-    const reviewLog = [];
-    Logger.log("Fetching search terms report...");
+  const searchTermsReport = AdsApp.report(
+    `SELECT Query, AdGroupId, CampaignId, Impressions, Clicks, Date
+     FROM SEARCH_QUERY_PERFORMANCE_REPORT
+     WHERE Impressions > 0 AND Date >= '${START_DATE}'`
+  );
 
-    const searchTermsReport = AdsApp.report(
-      `SELECT Query, AdGroupId, CampaignId, Impressions, Clicks
-       FROM SEARCH_QUERY_PERFORMANCE_REPORT
-       WHERE Impressions > 0`
-    );
+  const rows = searchTermsReport.rows();
 
-    const rows = searchTermsReport.rows();
-    Logger.log("Processing search terms...");
+  while (rows.hasNext()) {
+    const row = rows.next();
+    const query = row['Query'];
+    const adGroupId = row['AdGroupId'];
+    const campaignId = row['CampaignId'];
 
-    while (rows.hasNext()) {
-      const row = rows.next();
-      const query = row['Query'];
-      const adGroupId = row['AdGroupId'];
-      const campaignId = row['CampaignId'];
+    // Разложить запрос на уникальные слова
+    const uniqueWords = Array.from(new Set(query.split(/\s+/)));
 
-      const uniqueWords = Array.from(new Set(query.split(/\s+/)));
-      const hasUnallowedWords = uniqueWords.some(word => !allowedWords.includes(word.toLowerCase()));
+    // Проверить, есть ли хотя бы одно слово, которого нет в списке разрешённых
+    const hasUnallowedWords = uniqueWords.some(word => !allowedWords.includes(word.toLowerCase()));
 
-      if (hasUnallowedWords) {
-        reviewLog.push({
-          query: query,
-          adGroupId: adGroupId,
-          campaignId: campaignId
-        });
-      }
+    // Если есть запрещённые слова, добавляем всю фразу в лог
+    if (hasUnallowedWords) {
+      reviewLog.push({
+        query: query,
+        adGroupId: adGroupId,
+        campaignId: campaignId
+      });
     }
-
-    logReviewItems(reviewLog);
-    addNegativeKeywords(reviewLog);
-    Logger.log("Main function completed successfully.");
-  } catch (e) {
-    Logger.log(`Error in main function: ${e.message}`);
-    Logger.log(`Stack trace: ${e.stack}`);
   }
+
+  // Логирование для ручного одобрения
+  logReviewItems(reviewLog);
+
+  // Добавление минус-слов
+  addNegativeKeywordsExactMatch(reviewLog);
 }
 
+// Получение списка разрешенных слов из Google Таблицы через CSV
 function fetchAllowedWordsFromCSV() {
-  try {
-    Logger.log("Fetching allowed words from CSV...");
-    const response = UrlFetchApp.fetch(SPREADSHEET_CSV_URL);
-    const csvData = response.getContentText();
-    const rows = csvData.split("\n");
-    return rows.map(row => row.trim().toLowerCase()).filter(Boolean);
-  } catch (e) {
-    Logger.log(`Error fetching allowed words: ${e.message}`);
-    return [];
-  }
+  const response = UrlFetchApp.fetch(SPREADSHEET_CSV_URL);
+  const csvData = response.getContentText(); // Получаем содержимое CSV
+  const rows = csvData.split("\n"); // Разбиваем на строки
+  return rows.map(row => row.trim().toLowerCase()).filter(Boolean); // Приводим к нижнему регистру и убираем пустые строки
 }
 
+// Функция логирования
 function logReviewItems(log) {
   if (log.length === 0) {
     Logger.log("No new negative keywords to review.");
     return;
   }
 
+  Logger.log("The following search terms are suggested for negative keywords:");
   log.forEach(item => {
-    Logger.log(`Query: "${item.query}", AdGroupId: ${item.adGroupId}, CampaignId: ${item.campaignId}`);
+    Logger.log(`Query: \"${item.query}\", AdGroupId: ${item.adGroupId}, CampaignId: ${item.campaignId}`);
   });
 }
 
-function addNegativeKeywords(log) {
+// Добавление минус-слов в точном соответствии
+function addNegativeKeywordsExactMatch(log) {
   if (log.length === 0) {
     Logger.log("No negative keywords to add.");
     return;
@@ -79,11 +74,8 @@ function addNegativeKeywords(log) {
   log.forEach(item => {
     const adGroup = AdsApp.adGroups().withIds([item.adGroupId]).get().next();
     if (adGroup) {
-      adGroup.createNegativeKeyword(`"${item.query}"`);
-      Logger.log(`Added negative keyword: "${item.query}"`);
+      adGroup.createNegativeKeyword(`[${item.query}]`); // Точное соответствие в квадратных скобках
+      Logger.log(`Added negative keyword (exact match): [${item.query}] to Ad Group ID: ${item.adGroupId}`);
     }
   });
 }
-
-// Автоматический вызов main()
-main();
