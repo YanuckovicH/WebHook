@@ -1,27 +1,20 @@
 // URL опубликованной Google Таблицы в формате CSV
 const SPREADSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTM_zxGOTUVcyLqtkTURUizM4bPRM_gkGBRCOzjPnUVE-b_z5tUuT1GrcB19t5hFHrflgWUa9T2j910/pub?output=csv";
-let START_DATE = null; // Дата начала проверки, может быть задана из вызывающего скрипта
+const START_DATE = Utilities.formatDate(new Date(), AdsApp.currentAccount().getTimeZone(), 'yyyy-MM-dd'); // Сегодняшняя дата в формате yyyy-MM-dd
 
-function main(startDate) {
-  START_DATE = startDate || null; // Если дата передана, используем её, иначе проверяем весь аккаунт
+function main() {
   Logger.log("Main script execution started...");
-
-  if (START_DATE) {
-    Logger.log(`Date range set to: ${START_DATE}`);
-  } else {
-    Logger.log("No date range set. Script will run for the entire account.");
-  }
+  Logger.log(`Date range set to: ${START_DATE}`);
 
   const allowedWords = fetchAllowedWordsFromCSV();
   Logger.log(`Allowed words fetched: ${allowedWords.length} words`);
 
   Logger.log("Fetching search terms report...");
-  const dateCondition = START_DATE ? `AND segments.date >= '${START_DATE}'` : "";
 
   const searchTermsReport = AdsApp.report(
     `SELECT Query, AdGroupId, CampaignId, Impressions, Clicks
      FROM SEARCH_QUERY_PERFORMANCE_REPORT
-     WHERE Impressions > 0 ${dateCondition}`
+     WHERE Impressions > 0 AND Date = '${START_DATE}'`
   );
   Logger.log("Report generated successfully.");
 
