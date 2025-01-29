@@ -1,10 +1,11 @@
-// URL опубликованной Google Таблицы в формате CSV
 const SPREADSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTM_zxGOTUVcyLqtkTURUizM4bPRM_gkGBRCOzjPnUVE-b_z5tUuT1GrcB19t5hFHrflgWUa9T2j910/pub?output=csv";
-const START_DATE = Utilities.formatDate(new Date(), AdsApp.currentAccount().getTimeZone(), 'yyyyMMdd'); // Дата запуска скрипта
+const START_DATE = Utilities.formatDate(new Date(), AdsApp.currentAccount().getTimeZone(), 'yyyyMMdd'); // Формат даты
 
 function main() {
-  const allowedWords = fetchAllowedWordsFromCSV(); // Получаем список разрешенных слов
-  const reviewLog = []; // Лог для слов, требующих добавления в минус-слова
+  Logger.log(`Script start date: ${START_DATE}`); // Логирование даты для проверки
+
+  const allowedWords = fetchAllowedWordsFromCSV(); 
+  const reviewLog = [];
 
   const searchTermsReport = AdsApp.report(
     `SELECT Query, AdGroupId, CampaignId, Impressions, Clicks, Date
@@ -20,38 +21,25 @@ function main() {
     const adGroupId = row['AdGroupId'];
     const campaignId = row['CampaignId'];
 
-    // Разложить запрос на уникальные слова
     const uniqueWords = Array.from(new Set(query.split(/\s+/)));
-
-    // Проверить, есть ли хотя бы одно слово, которого нет в списке разрешённых
     const hasUnallowedWords = uniqueWords.some(word => !allowedWords.includes(word.toLowerCase()));
 
-    // Если есть запрещённые слова, добавляем всю фразу в лог
     if (hasUnallowedWords) {
-      reviewLog.push({
-        query: query,
-        adGroupId: adGroupId,
-        campaignId: campaignId
-      });
+      reviewLog.push({ query, adGroupId, campaignId });
     }
   }
 
-  // Логирование для ручного одобрения
   logReviewItems(reviewLog);
-
-  // Добавление минус-слов
   addNegativeKeywordsExactMatch(reviewLog);
 }
 
-// Получение списка разрешенных слов из Google Таблицы через CSV
 function fetchAllowedWordsFromCSV() {
   const response = UrlFetchApp.fetch(SPREADSHEET_CSV_URL);
-  const csvData = response.getContentText(); // Получаем содержимое CSV
-  const rows = csvData.split("\n"); // Разбиваем на строки
-  return rows.map(row => row.trim().toLowerCase()).filter(Boolean); // Приводим к нижнему регистру и убираем пустые строки
+  const csvData = response.getContentText();
+  const rows = csvData.split("\n");
+  return rows.map(row => row.trim().toLowerCase()).filter(Boolean);
 }
 
-// Функция логирования
 function logReviewItems(log) {
   if (log.length === 0) {
     Logger.log("No new negative keywords to review.");
@@ -60,11 +48,10 @@ function logReviewItems(log) {
 
   Logger.log("The following search terms are suggested for negative keywords:");
   log.forEach(item => {
-    Logger.log(`Query: \"${item.query}\", AdGroupId: ${item.adGroupId}, CampaignId: ${item.campaignId}`);
+    Logger.log(`Query: "${item.query}", AdGroupId: ${item.adGroupId}, CampaignId: ${item.campaignId}`);
   });
 }
 
-// Добавление минус-слов в точном соответствии
 function addNegativeKeywordsExactMatch(log) {
   if (log.length === 0) {
     Logger.log("No negative keywords to add.");
@@ -74,7 +61,7 @@ function addNegativeKeywordsExactMatch(log) {
   log.forEach(item => {
     const adGroup = AdsApp.adGroups().withIds([item.adGroupId]).get().next();
     if (adGroup) {
-      adGroup.createNegativeKeyword(`[${item.query}]`); // Точное соответствие в квадратных скобках
+      adGroup.createNegativeKeyword(`[${item.query}]`);
       Logger.log(`Added negative keyword (exact match): [${item.query}] to Ad Group ID: ${item.adGroupId}`);
     }
   });
