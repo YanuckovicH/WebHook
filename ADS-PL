@@ -6,11 +6,13 @@ function main() {
   Logger.log("Main script execution started...");
   Logger.log(`Date range set to: ${START_DATE}`);
 
+  // Получаем список разрешенных слов из Google Таблицы
   const allowedWords = fetchAllowedWordsFromCSV();
   Logger.log(`Allowed words fetched: ${allowedWords.length} words`);
 
   Logger.log("Fetching search terms report...");
 
+  // Получаем отчет о поисковых запросах за текущий день
   const searchTermsReport = AdsApp.report(
     `SELECT Query, AdGroupId, CampaignId, Impressions, Clicks
      FROM SEARCH_QUERY_PERFORMANCE_REPORT
@@ -29,6 +31,7 @@ function main() {
   const reviewLog = [];
   let processedRows = 0;
 
+  // Перебираем строки отчета
   while (rows.hasNext()) {
     const row = rows.next();
     Logger.log(`Processing query: ${row['Query']}`);
@@ -37,7 +40,10 @@ function main() {
     const adGroupId = row['AdGroupId'];
     const campaignId = row['CampaignId'];
 
+    // Разбиваем запрос на уникальные слова
     const uniqueWords = Array.from(new Set(query.split(/\s+/)));
+    
+    // Отбираем слова, которых нет в списке разрешенных
     const negativeWords = uniqueWords.filter(word => !allowedWords.includes(word.toLowerCase()));
 
     if (negativeWords.length > 0) {
@@ -53,6 +59,7 @@ function main() {
   addNegativeKeywords(reviewLog);
 }
 
+// Функция для получения списка разрешенных слов из Google Таблицы
 function fetchAllowedWordsFromCSV() {
   Logger.log("Fetching allowed words from CSV...");
   const response = UrlFetchApp.fetch(SPREADSHEET_CSV_URL);
@@ -63,6 +70,7 @@ function fetchAllowedWordsFromCSV() {
   return allowedWords;
 }
 
+// Функция логирования найденных запрещенных слов
 function logReviewItems(log) {
   if (log.length === 0) {
     Logger.log("No new negative keywords to review.");
@@ -75,6 +83,7 @@ function logReviewItems(log) {
   });
 }
 
+// Функция добавления отдельных минус-слов в рекламные группы
 function addNegativeKeywords(log) {
   if (log.length === 0) {
     Logger.log("No negative keywords to add.");
