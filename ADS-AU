@@ -1,0 +1,94 @@
+// URL опубликованной Google Таблицы в формате CSV
+const SPREADSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTM_zxGOTUVcyLqtkTURUizM4bPRM_gkGBRCOzjPnUVE-b_z5tUuT1GrcB19t5hFHrflgWUa9T2j910/pub?gid=0&single=true&output=csv";
+const START_DATE = Utilities.formatDate(new Date(), AdsApp.currentAccount().getTimeZone(), 'yyyy-MM-dd');
+
+function main() {
+  Logger.log("Main script execution started...");
+  Logger.log(`Date range set to: ${START_DATE}`);
+
+  const allowedWords = fetchAllowedWordsFromCSV();
+  Logger.log(`Allowed words fetched: ${allowedWords.length} words`);
+
+  Logger.log("Fetching search terms report...");
+  const searchTermsReport = AdsApp.report(
+    `SELECT Query, AdGroupId, CampaignId, Impressions, Clicks
+     FROM SEARCH_QUERY_PERFORMANCE_REPORT
+     WHERE Impressions > 0 AND Date = '${START_DATE}'`
+  );
+  Logger.log("Report generated successfully.");
+
+  const rows = searchTermsReport.rows();
+  if (!rows.hasNext()) {
+    Logger.log("No rows found in the report.");
+    return;
+  }
+
+  const reviewLog = [];
+  let processedRows = 0;
+
+  while (rows.hasNext()) {
+    const row = rows.next();
+    const query = row['Query'];
+    const adGroupId = row['AdGroupId'];
+    const campaignId = row['CampaignId'];
+
+    const uniqueWords = Array.from(new Set(query.split(/\s+/)));
+    const negativeWords = uniqueWords.filter(word => !allowedWords.includes(word.toLowerCase()));
+
+    if (negativeWords.length > 0) {
+      Logger.log(`Unallowed words found in query: ${query}`);
+      reviewLog.push({ negativeWords, query, adGroupId, campaignId });
+    }
+    processedRows++;
+  }
+
+  Logger.log(`Total rows processed: ${processedRows}`);
+  logReviewItems(reviewLog);
+  addNegativeKeywords(reviewLog);
+}
+
+function fetchAllowedWordsFromCSV() {
+  Logger.log("Fetching allowed words from CSV...");
+  const response = UrlFetchApp.fetch(SPREADSHEET_CSV_URL);
+  const csvData = response.getContentText();
+  const rows = csvData.split("\n");
+  const allowedWords = rows.map(row => row.trim().toLowerCase()).filter(Boolean);
+  Logger.log(`Fetched ${allowedWords.length} allowed words.`);
+  return allowedWords;
+}
+
+function logReviewItems(log) {
+  if (log.length === 0) {
+    Logger.log("No new negative keywords to review.");
+    return;
+  }
+
+  Logger.log("The following words and queries are suggested for negative keywords:");
+  log.forEach(item => {
+    Logger.log(`Negative Words: [${item.negativeWords.join(", ")}] - Query: "${item.query}" - AdGroupId: ${item.adGroupId}, CampaignId: ${item.campaignId}`);
+  });
+}
+
+function addNegativeKeywords(log) {
+  if (log.length === 0) {
+    Logger.log("No negative keywords to add.");
+    return;
+  }
+
+  log.forEach(item => {
+    const adGroupIterator = AdsApp.adGroups().withIds([item.adGroupId]).get();
+    if (adGroupIterator.hasNext()) {
+      const adGroup = adGroupIterator.next();
+      
+      // Добавляем отдельные запрещенные слова
+      item.negativeWords.forEach(word => {
+        adGroup.createNegativeKeyword(`"${word}"`);
+        Logger.log(`Added negative keyword: "${word}" to Ad Group ID: ${item.adGroupId}`);
+      });
+      
+      // Добавляем всю фразу целиком в точном соответствии
+      adGroup.createNegativeKeyword(`[${item.query}]`);
+      Logger.log(`Added negative phrase: [${item.query}] to Ad Group ID: ${item.adGroupId}`);
+    }
+  });
+}
